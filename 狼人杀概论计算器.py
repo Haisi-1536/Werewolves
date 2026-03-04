@@ -109,6 +109,7 @@ class WerewolfProbabilityGUI:
                 "觉醒隐狼": "wolf",
                 "隐狼": "wolf",
                 "恶夜骑士": "wolf",
+                "悍跳狼": "wolf",
             },
             "神职": {
                 "预言家": "god",
@@ -574,14 +575,34 @@ class WerewolfProbabilityGUI:
             btn.pack(fill=tk.X, pady=2)
 
         # 当前权重列表
+        # 当前权重列表
         weight_list_frame = ttk.LabelFrame(scrollable_frame, text="已设置权重", padding="5")
         weight_list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
-        self.weight_listbox = tk.Listbox(weight_list_frame, height=6,
+        # 列表框架
+        list_container = ttk.Frame(weight_list_frame)
+        list_container.pack(fill=tk.BOTH, expand=True)
+
+        self.weight_listbox = tk.Listbox(list_container, height=4,
                                          bg=self.colors['entry_bg'],
                                          fg=self.colors['fg'],
                                          selectbackground=self.colors['tree_select'])
-        self.weight_listbox.pack(fill=tk.BOTH, expand=True)
+        self.weight_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 添加滚动条
+        weight_scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL,
+                                        command=self.weight_listbox.yview)
+        weight_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.weight_listbox.configure(yscrollcommand=weight_scrollbar.set)
+
+        # 按钮框架
+        weight_btn_frame = ttk.Frame(weight_list_frame)
+        weight_btn_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Button(weight_btn_frame, text="🗑️ 删除选中",
+                  command=self.delete_selected_weight).pack(side=tk.LEFT, padx=2)
+        ttk.Button(weight_btn_frame, text="🔄 清除所有",
+                  command=self.clear_all_weights).pack(side=tk.LEFT, padx=2)
 
     def create_setting_tab(self, parent):
         """创建设置标签页"""
@@ -1249,6 +1270,27 @@ class WerewolfProbabilityGUI:
         except ValueError:
             messagebox.showerror("错误", "请输入有效的玩家编号和权重数值")
 
+    def delete_selected_weight(self):
+        """删除选中的权重"""
+        selection = self.weight_listbox.curselection()
+        if selection:
+            text = self.weight_listbox.get(selection[0])
+            try:
+                # 解析文本获取玩家编号
+                if '玩家' in text:
+                    player = int(text.split('玩家')[1].split(':')[0])
+                    if player in self.behavior_weights:
+                        del self.behavior_weights[player]
+                        self.log(f"删除玩家{player}的行为权重")
+                        self.update_weight_listbox()
+            except:
+                pass
+
+    def clear_all_weights(self):
+        """清除所有权重"""
+        self.behavior_weights.clear()
+        self.update_weight_listbox()
+        self.log("已清除所有行为权重")
     def update_info_listbox(self):
         """更新信息列表"""
         self.info_listbox.delete(0, tk.END)
@@ -1276,8 +1318,9 @@ class WerewolfProbabilityGUI:
         self.weight_listbox.delete(0, tk.END)
 
         for player, weights in sorted(self.behavior_weights.items()):
-            display_text = f"玩家{player}: 狼{weights['狼权']} 神{weights['神权']} 人{weights['人权']}"
+            display_text = f"玩家{player}: 狼{weights['狼权']:.1f} 神{weights['神权']:.1f} 人{weights['人权']:.1f}"
             self.weight_listbox.insert(tk.END, display_text)
+            self.clear_all_info
 
     def delete_selected_info(self):
         """删除选中的信息"""
@@ -1301,10 +1344,10 @@ class WerewolfProbabilityGUI:
     def clear_all_info(self):
         """清空所有信息"""
         self.known_info.clear()
-        self.behavior_weights.clear()
+        self.behavior_weights.clear()  # 确保清除权重
         self.update_info_listbox()
-        self.update_weight_listbox()
-        self.update_all_player_cards()  # 更新所有卡片
+        self.update_weight_listbox()  # 更新权重列表显示
+        self.update_all_player_cards()
         self.update_triangle_analysis()
         self.update_status()
         self.log("已清空所有信息")
