@@ -88,6 +88,8 @@ class WerewolfProbabilityGUI:
                 "擦边": "good_mark",
                 "贴脸": "good_mark",
                 "离线": "good_mark",
+                "好人": "good_mark",
+
             },
             "狼人": {
                 "狼人": "wolf",
@@ -110,6 +112,8 @@ class WerewolfProbabilityGUI:
                 "隐狼": "wolf",
                 "恶夜骑士": "wolf",
                 "悍跳狼": "wolf",
+                "听杀": "wolf",
+                "倒钩狼": "wolf",
             },
             "神职": {
                 "预言家": "god",
@@ -387,15 +391,15 @@ class WerewolfProbabilityGUI:
         self.player_combo.bind('<<ComboboxSelected>>', self.on_player_selected)
 
         # 身份分类选择（使用标签页）
-        role_notebook = ttk.Notebook(scrollable_frame)
-        role_notebook.pack(fill=tk.BOTH, expand=True, pady=10)
+        self.role_notebook = ttk.Notebook(scrollable_frame)  # 改为 self.role_notebook
+        self.role_notebook.pack(fill=tk.BOTH, expand=True, pady=10)
 
         self.role_vars = {}
 
         # 为每个身份分类创建标签页
         for category, roles in self.role_categories.items():
-            category_frame = ttk.Frame(role_notebook)
-            role_notebook.add(category_frame, text=category)
+            category_frame = ttk.Frame(self.role_notebook)
+            self.role_notebook.add(category_frame, text=category)
 
             # 创建单选按钮
             self.role_vars[category] = tk.StringVar()
@@ -485,6 +489,21 @@ class WerewolfProbabilityGUI:
         self.info_stats = ttk.Label(info_frame, text="已知: 0 | 狼: 0 | 神: 0 | 民: 0 | 标记: 0",
                                     font=("微软雅黑", 8))
         self.info_stats.pack(fill=tk.X, pady=2)
+
+    def switch_to_category_tab(self, target_category):
+        """切换到指定的分类标签页"""
+        try:
+            if not hasattr(self, 'role_notebook'):
+                return
+
+            tabs = self.role_notebook.tabs()
+            for i, tab_id in enumerate(tabs):
+                tab_text = self.role_notebook.tab(tab_id, "text")
+                if tab_text == target_category:
+                    self.role_notebook.select(i)
+                    break
+        except Exception as e:
+            pass
 
     def create_weight_tab(self, parent):
         """创建权重设置标签页"""
@@ -712,7 +731,7 @@ class WerewolfProbabilityGUI:
         """创建可视化号码牌标签页（仿网易狼人杀）"""
         # 主框架
         main_frame = ttk.Frame(parent)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
         # 标题
         title_frame = ttk.Frame(main_frame)
@@ -726,7 +745,7 @@ class WerewolfProbabilityGUI:
 
         # 创建两列布局
         columns_frame = ttk.Frame(main_frame)
-        columns_frame.pack(fill=tk.BOTH, expand=True, pady=20)
+        columns_frame.pack(fill=tk.BOTH, expand=True, pady=2)
 
         # 左列 (1-6)
         left_column = ttk.Frame(columns_frame)
@@ -752,7 +771,7 @@ class WerewolfProbabilityGUI:
 
         # 图例说明
         legend_frame = ttk.Frame(main_frame)
-        legend_frame.pack(fill=tk.X, pady=10)
+        legend_frame.pack(fill=tk.X, pady=5)
 
         ttk.Label(legend_frame, text="图例: ",
                  font=("微软雅黑", 10, "bold")).pack(side=tk.LEFT, padx=5)
@@ -797,14 +816,18 @@ class WerewolfProbabilityGUI:
         # 存储卡片引用
         self.player_cards[player_num] = card_frame
 
+        # 上部：号码和身份信息
+        top_frame = tk.Frame(card_frame, bg=self.colors['player_bg'])
+        top_frame.pack(fill=tk.X, padx=5, pady=2)
+
         # 左侧：号码和身份图标
-        left_frame = tk.Frame(card_frame, bg=self.colors['player_bg'])
-        left_frame.pack(side=tk.LEFT, padx=10)
+        left_frame = tk.Frame(top_frame, bg=self.colors['player_bg'])
+        left_frame.pack(side=tk.LEFT)
 
         # 圆形号码牌（用Label模拟）
         num_frame = tk.Frame(left_frame, bg=self.colors['player_border'],
                              width=40, height=40)
-        num_frame.pack(side=tk.LEFT, padx=5)
+        num_frame.pack(side=tk.LEFT, padx=2)
         num_frame.pack_propagate(False)
 
         # 号码标签
@@ -821,18 +844,58 @@ class WerewolfProbabilityGUI:
         # 存储标签引用
         self.player_labels[player_num] = icon_label
 
-        # 中间：身份名称（让它在中间自动扩展）
-        role_label = ttk.Label(card_frame, text="未知", font=("微软雅黑", 10))
+        # 身份名称
+        role_label = ttk.Label(top_frame, text="未知", font=("微软雅黑", 10))
         role_label.pack(side=tk.LEFT, padx=10, expand=True, fill=tk.X)
 
         # 存储角色名称标签
         self.player_labels[f"{player_num}_role"] = role_label
 
-        # 移除右侧三角形标签，让卡片更简洁
+        # 底部：概率显示区域（新增）
+        prob_frame = tk.Frame(card_frame, bg=self.colors['player_bg'])
+        prob_frame.pack(fill=tk.X, padx=5, pady=2)
+
+        # 狼人概率
+        wolf_frame = tk.Frame(prob_frame, bg=self.colors['player_bg'])
+        wolf_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        wolf_label = tk.Label(wolf_frame, text="🐺0%",
+                              bg=self.colors['player_bg'],
+                              fg=self.colors['wolf'],
+                              font=("微软雅黑", 8))
+        wolf_label.pack()
+
+        # 神职概率
+        god_frame = tk.Frame(prob_frame, bg=self.colors['player_bg'])
+        god_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        god_label = tk.Label(god_frame, text="👼0%",
+                             bg=self.colors['player_bg'],
+                             fg=self.colors['god'],
+                             font=("微软雅黑", 8))
+        god_label.pack()
+
+        # 平民概率
+        human_frame = tk.Frame(prob_frame, bg=self.colors['player_bg'])
+        human_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        human_label = tk.Label(human_frame, text="👤0%",
+                               bg=self.colors['player_bg'],
+                               fg=self.colors['human'],
+                               font=("微软雅黑", 8))
+        human_label.pack()
+
+        # 存储概率标签引用
+        self.player_labels[f"{player_num}_wolf_prob"] = wolf_label
+        self.player_labels[f"{player_num}_god_prob"] = god_label
+        self.player_labels[f"{player_num}_human_prob"] = human_label
 
         # 绑定点击事件 - 快速选择玩家
-        for widget in [card_frame, num_label, icon_label, role_label]:
+        for widget in [card_frame, num_label, icon_label, role_label, wolf_frame, god_frame, human_frame]:
             widget.bind('<Button-1>', lambda e, p=player_num: self.quick_select_player(p))
+            # 添加鼠标样式变化，提示可点击
+            widget.bind('<Enter>', lambda e, w=widget: w.config(cursor="hand2"))
+            widget.bind('<Leave>', lambda e, w=widget: w.config(cursor=""))
 
         # 初始化卡片颜色
         self.update_player_card(player_num)
@@ -842,13 +905,34 @@ class WerewolfProbabilityGUI:
         self.player_var.set(str(player_num))
         self.log(f"快速选择玩家 {player_num}")
 
-        # 如果该玩家已有身份，自动选中
+        # 先清空所有分类的选中状态
+        for var in self.role_vars.values():
+            var.set('')
+
+        # 如果该玩家已有身份，自动选中对应的身份
         if player_num in self.known_info:
             role = self.known_info[player_num]["role"]
-            for category, roles in self.role_categories.items():
-                if role in roles:
-                    self.role_vars[category].set(role)
-                    break
+            category = self.known_info[player_num].get("category")
+
+            # 直接使用保存的category来设置
+            if category and category in self.role_vars:
+                self.role_vars[category].set(role)
+
+                # 自动切换到对应的标签页，方便用户查看和修改
+                self.switch_to_category_tab(category)
+
+                self.log(f"自动选中身份: {role} [分类: {category}]")
+            else:
+                # 兼容旧数据，如果没有保存category，则遍历查找
+                for cat, roles in self.role_categories.items():
+                    if role in roles:
+                        self.role_vars[cat].set(role)
+
+                        # 自动切换到对应的标签页
+                        self.switch_to_category_tab(cat)
+
+                        self.log(f"自动选中身份: {role} [分类: {cat}]")
+                        break
 
     def update_player_card(self, player_num):
         """更新单个玩家卡片的显示"""
@@ -882,6 +966,19 @@ class WerewolfProbabilityGUI:
                 icon = "❓"
 
             card_frame.config(bg=color)
+            # 同时更新内部所有框架的颜色
+            for child in card_frame.winfo_children():
+                if isinstance(child, tk.Frame):
+                    child.config(bg=color)
+                    for subchild in child.winfo_children():
+                        if isinstance(subchild, tk.Frame):
+                            subchild.config(bg=color)
+                        elif isinstance(subchild, tk.Label):
+                            if subchild not in [self.player_labels.get(f"{player_num}_wolf_prob"),
+                                                self.player_labels.get(f"{player_num}_god_prob"),
+                                                self.player_labels.get(f"{player_num}_human_prob")]:
+                                subchild.config(bg=color)
+
             if icon_label:
                 icon_label.config(text=icon)
             if role_label:
@@ -889,10 +986,122 @@ class WerewolfProbabilityGUI:
         else:
             # 未知玩家
             card_frame.config(bg=self.colors['player_bg'])
+            # 更新内部框架颜色
+            for child in card_frame.winfo_children():
+                if isinstance(child, tk.Frame):
+                    child.config(bg=self.colors['player_bg'])
+                    for subchild in child.winfo_children():
+                        if isinstance(subchild, tk.Frame):
+                            subchild.config(bg=self.colors['player_bg'])
+                        elif isinstance(subchild, tk.Label):
+                            if subchild not in [self.player_labels.get(f"{player_num}_wolf_prob"),
+                                                self.player_labels.get(f"{player_num}_god_prob"),
+                                                self.player_labels.get(f"{player_num}_human_prob")]:
+                                subchild.config(bg=self.colors['player_bg'])
+
             if icon_label:
                 icon_label.config(text="❓")
             if role_label:
                 role_label.config(text="未知")
+
+    def update_card_probabilities(self, results, result_type="综合分析"):
+        """更新每个卡片上的概率显示
+
+        Args:
+            results: 概率结果数据
+            result_type: 结果类型（蒙特卡洛/三角定律/贝叶斯/综合分析）
+        """
+        try:
+            # 先重置所有概率显示为0
+            for player_num in range(1, 13):
+                wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+                god_label = self.player_labels.get(f"{player_num}_god_prob")
+                human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+                if wolf_label:
+                    wolf_label.config(text="🐺0%")
+                if god_label:
+                    god_label.config(text="👼0%")
+                if human_label:
+                    human_label.config(text="👤0%")
+
+            # 根据不同算法类型更新概率
+            if result_type == "蒙特卡洛":
+                # 从 tree 中获取数据并更新
+                for item in self.tree.get_children():
+                    values = self.tree.item(item)['values']
+                    if values and len(values) >= 4:
+                        try:
+                            player_text = values[0]
+                            if '玩家' in player_text:
+                                player_num = int(player_text.replace('玩家', ''))
+                                wolf_prob = values[1].replace('%', '')
+                                god_prob = values[2].replace('%', '')
+                                human_prob = values[3].replace('%', '')
+
+                                wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+                                god_label = self.player_labels.get(f"{player_num}_god_prob")
+                                human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+                                if wolf_label:
+                                    wolf_label.config(text=f"🐺{wolf_prob}")
+                                if god_label:
+                                    god_label.config(text=f"👼{god_prob}")
+                                if human_label:
+                                    human_label.config(text=f"👤{human_prob}")
+                        except:
+                            continue
+
+            elif result_type == "三角定律":
+                # 三角定律只更新狼人概率
+                for player_num, prob in results.items():
+                    wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+                    god_label = self.player_labels.get(f"{player_num}_god_prob")
+                    human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+                    if wolf_label:
+                        wolf_label.config(text=f"🐺{prob:.1%}")
+                    if god_label:
+                        god_label.config(text="👼-")
+                    if human_label:
+                        human_label.config(text="👤-")
+
+            elif result_type == "贝叶斯":
+                # 贝叶斯只更新狼人概率
+                for player_num, prob in results.items():
+                    wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+                    god_label = self.player_labels.get(f"{player_num}_god_prob")
+                    human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+                    if wolf_label:
+                        wolf_label.config(text=f"🐺{prob:.1%}")
+                    if god_label:
+                        god_label.config(text="👼-")
+                    if human_label:
+                        human_label.config(text="👤-")
+
+            elif result_type == "综合分析":
+                # 综合分析更新所有概率
+                for player_num, probs in results.items():
+                    wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+                    god_label = self.player_labels.get(f"{player_num}_god_prob")
+                    human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+                    wolf_prob = probs.get('狼人', 0)
+                    god_prob = probs.get('神民', 0)
+                    human_prob = probs.get('平民', 0)
+
+                    if wolf_label:
+                        wolf_label.config(text=f"🐺{wolf_prob:.1%}")
+                    if god_label:
+                        god_label.config(text=f"👼{god_prob:.1%}")
+                    if human_label:
+                        human_label.config(text=f"👤{human_prob:.1%}")
+
+            self.log(f"已更新卡片概率显示 ({result_type})")
+
+        except Exception as e:
+            self.log(f"更新卡片概率失败: {e}")
 
     def update_all_player_cards(self):
         """更新所有玩家卡片"""
@@ -1192,16 +1401,23 @@ class WerewolfProbabilityGUI:
         return "unknown"
 
     def on_player_selected(self, event):
-        """玩家选择事件"""
+        """玩家选择事件（下拉框）"""
         player = self.player_var.get()
         if player and player.isdigit():
             player = int(player)
+
+            # 先清空所有分类的选中状态
+            for var in self.role_vars.values():
+                var.set('')
+
+            # 如果该玩家已有身份，自动选中对应的身份
             if player in self.known_info:
                 role = self.known_info[player]["role"]
-                # 找到对应的分类
+                # 找到对应的分类并选中
                 for category, roles in self.role_categories.items():
                     if role in roles:
                         self.role_vars[category].set(role)
+                        self.log(f"自动选中身份: {role}")
                         break
 
     def add_known_info(self):
@@ -1209,19 +1425,43 @@ class WerewolfProbabilityGUI:
         try:
             player = int(self.player_var.get())
 
-            # 获取选中的身份
+            # 获取当前显示的标签页
+            current_tab_index = self.role_notebook.index(self.role_notebook.select())
+            current_tab_text = self.role_notebook.tab(current_tab_index, "text")
+
+            # 优先使用当前标签页的选中身份
             selected_role = None
             selected_category = None
-            for category, var in self.role_vars.items():
-                role = var.get()
-                if role:
-                    selected_role = role
-                    selected_category = category
-                    break
+
+            # 先检查当前标签页是否有选中身份
+            if current_tab_text in self.role_vars:
+                current_role = self.role_vars[current_tab_text].get()
+                if current_role:
+                    selected_role = current_role
+                    selected_category = current_tab_text
+
+            # 如果当前标签页没有选中，再遍历所有分类（兼容旧逻辑）
+            if not selected_role:
+                for category, var in self.role_vars.items():
+                    role = var.get()
+                    if role:
+                        selected_role = role
+                        selected_category = category
+                        break
 
             if not selected_role:
                 messagebox.showwarning("警告", "请选择身份")
                 return
+
+            # 检查是否要修改已有身份
+            old_info = self.known_info.get(player)
+            if old_info:
+                old_role = old_info["role"]
+                old_category = old_info.get("category")
+                self.log(
+                    f"修改玩家{player}的身份: {old_role} [{old_category}] -> {selected_role} [{selected_category}]")
+            else:
+                self.log(f"添加已知信息: 玩家{player} 是 {selected_role} [{selected_category}]")
 
             self.known_info[player] = {
                 "role": selected_role,
@@ -1231,18 +1471,17 @@ class WerewolfProbabilityGUI:
 
             self.update_info_listbox()
             self.update_status()
-            self.update_player_card(player)  # 更新对应卡片的显示
+            self.update_player_card(player)
 
             triangle = self.get_player_triangle(player)
-            self.log(f"添加已知信息: 玩家{player} 是 {selected_role} [所在三角: {triangle}]")
 
             # 刷新三角形分析
             self.update_triangle_analysis()
 
-            # 清空选择
+            # 清空玩家编号选择，但保留当前标签页的选中状态
             self.player_var.set('')
-            for var in self.role_vars.values():
-                var.set('')
+
+            # 注意：不要清空 role_vars，让当前选中的身份保留
 
         except ValueError:
             messagebox.showerror("错误", "请选择有效的玩家编号")
@@ -1350,6 +1589,20 @@ class WerewolfProbabilityGUI:
         self.update_all_player_cards()
         self.update_triangle_analysis()
         self.update_status()
+
+        # 清空概率显示
+        for player_num in range(1, 13):
+            wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
+            god_label = self.player_labels.get(f"{player_num}_god_prob")
+            human_label = self.player_labels.get(f"{player_num}_human_prob")
+
+            if wolf_label:
+                wolf_label.config(text="🐺0%")
+            if god_label:
+                god_label.config(text="👼0%")
+            if human_label:
+                human_label.config(text="👤0%")
+
         self.log("已清空所有信息")
 
         # 清空结果显示
@@ -1655,6 +1908,21 @@ class WerewolfProbabilityGUI:
                     triangle
                 ), tags=(tag,))
 
+            # 收集结果用于概率显示
+            mc_results = {}
+            for player in unknown_players:
+                wolf_prob = role_counts[player]['狼人'] / sim_count
+                god_prob = role_counts[player]['神民'] / sim_count
+                human_prob = role_counts[player]['平民'] / sim_count
+                mc_results[player] = {
+                    '狼人': wolf_prob,
+                    '神民': god_prob,
+                    '平民': human_prob
+                }
+
+            # 更新卡片概率显示
+            self.update_card_probabilities(mc_results, "蒙特卡洛")
+
             self.log("蒙特卡洛模拟完成")
 
         except Exception as e:
@@ -1730,6 +1998,15 @@ class WerewolfProbabilityGUI:
                     "-",
                     triangle
                 ), tags=(tag,))
+
+            # 收集结果用于概率显示
+            tri_results = {}
+            for player in unknown_players:
+                prob = wolf_counts[player] / sim_count
+                tri_results[player] = prob
+
+            # 更新卡片概率显示
+            self.update_card_probabilities(tri_results, "三角定律")
 
             self.log("三角定律计算完成")
 
@@ -1857,6 +2134,9 @@ class WerewolfProbabilityGUI:
                     triangle
                 ), tags=(tag,))
 
+            # 更新卡片概率显示
+            self.update_card_probabilities(results, "贝叶斯")
+
             self.log("贝叶斯更新完成")
 
         except Exception as e:
@@ -1924,6 +2204,18 @@ class WerewolfProbabilityGUI:
                     f"{bayes_scores.get(player, 0):.1%}",
                     triangle
                 ), tags=(tag,))
+
+            # 收集结果用于概率显示
+            comp_results = {}
+            for player in unknown_players:
+                comp_results[player] = {
+                    '狼人': comprehensive_scores[player],
+                    '神民': mc_scores[player],
+                    '平民': bayes_scores.get(player, 0)
+                }
+
+            # 更新卡片概率显示
+            self.update_card_probabilities(comp_results, "综合分析")
 
             self.log("综合分析完成")
 
