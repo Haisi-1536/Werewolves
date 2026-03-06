@@ -11,10 +11,12 @@ import os
 class WerewolfProbabilityGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("狼人杀概论计算器 v2.0")
+        self.root.title("狼人杀概论计算器 v1.0")
         self.root.geometry("1400x850")
         self.root.minsize(1200, 700)
         self.root.resizable(True, True)
+        # 存储发言记录的数据结构
+        self.speech_records = {}  # 格式: {(player, round): "发言内容"}
 
         # 主题配置 - 默认浅色
         self.themes = {
@@ -30,13 +32,14 @@ class WerewolfProbabilityGUI:
                 'tree_select': '#c0c0c0',
                 'accent': '#ff4444',
                 'wolf': '#cc0000',
-                'god': '#0066cc',
+                'god': '#9933cc',
                 'human': '#008800',
                 'gold': '#b8860b',
                 'entry_bg': '#ffffff',
                 'entry_fg': '#000000',
                 'player_bg': '#e6e6e6',
-                'player_border': '#cccccc'
+                'player_border': '#cccccc',
+                'custom_tag': '#9933cc'  # 自定义标签颜色
             },
             "深色": {
                 'bg': '#2b2b2b',
@@ -56,7 +59,8 @@ class WerewolfProbabilityGUI:
                 'entry_bg': '#404040',
                 'entry_fg': '#ffffff',
                 'player_bg': '#3a3a3a',
-                'player_border': '#555555'
+                'player_border': '#555555',
+                'custom_tag': '#b266ff'  # 自定义标签颜色
             }
         }
 
@@ -85,11 +89,10 @@ class WerewolfProbabilityGUI:
                 "铜水": "good_mark",
                 "爆水": "good_mark",
                 "花露水": "good_mark",
-                "擦边": "good_mark",
                 "贴脸": "good_mark",
                 "离线": "good_mark",
+                "反金": "good_mark",
                 "好人": "good_mark",
-
             },
             "狼人": {
                 "狼人": "wolf",
@@ -112,8 +115,6 @@ class WerewolfProbabilityGUI:
                 "隐狼": "wolf",
                 "恶夜骑士": "wolf",
                 "悍跳狼": "wolf",
-                "听杀": "wolf",
-                "倒钩狼": "wolf",
             },
             "神职": {
                 "预言家": "god",
@@ -158,6 +159,50 @@ class WerewolfProbabilityGUI:
         # 已知信息存储
         self.known_info = {}  # {player: {"role": role, "type": type}}
         self.behavior_weights = {}
+
+        # 自定义标签存储 {tag_name: {"wolf": wolf_weight, "god": god_weight, "human": human_weight}}
+        # 自定义标签存储 {tag_name: {"wolf": wolf_weight, "god": god_weight, "human": human_weight}}
+        self.custom_tags = {
+            # 狼面较大类
+            "🔪 听杀": {"wolf": 2.1, "god": 0.4, "human": 0.5},
+            "🔪 发言爆匪": {"wolf": 2.2, "god": 0.4, "human": 0.4},
+            "👑 狼王逻辑": {"wolf": 2.5, "god": 0.3, "human": 0.2},
+            "🔄 倒钩发言": {"wolf": 1.8, "god": 0.6, "human": 0.6},
+            "💀 匪事干尽": {"wolf": 2.4, "god": 0.3, "human": 0.3},
+            "👁️ 狼人视角": {"wolf": 2.2, "god": 0.4, "human": 0.4},
+            "🔄 反复横跳": {"wolf": 1.8, "god": 0.8, "human": 1.4},
+            "🔪 抗推位": {"wolf": 2.0, "god": 0.5, "human": 1.5},
+            "🎣 倒钩": {"wolf": 2.0, "god": 0.8, "human": 0.7},
+            "🎭 拱火": {"wolf": 1.8, "god": 0.6, "human": 1.6},
+
+            # 神面较大类
+            "💬 发言很正": {"wolf": 0.3, "god": 2.2, "human": 1.5},
+            "✅ 逻辑正确": {"wolf": 0.4, "god": 2.3, "human": 1.3},
+            "🛡️ 像个身份": {"wolf": 0.3, "god": 2.4, "human": 1.3},
+            "👑 强势带队": {"wolf": 0.8, "god": 2.1, "human": 1.1},
+            "💎 铁神": {"wolf": 0.2, "god": 2.5, "human": 0.3},
+
+            # 平民面较大类
+            "😐 平平无奇": {"wolf": 1.2, "god": 0.8, "human": 2.0},
+            "🤔 闭眼玩家": {"wolf": 1.0, "god": 0.9, "human": 2.1},
+            "😴 挂机玩家": {"wolf": 1.1, "god": 0.7, "human": 2.2},
+            "📝 跟票玩家": {"wolf": 1.2, "god": 0.9, "human": 1.9},
+            "👂 听劝玩家": {"wolf": 1.0, "god": 1.0, "human": 2.0},
+            "🤐 沉默": {"wolf": 1.1, "god": 1.2, "human": 1.7},
+            "🌾 铁民": {"wolf": 0.3, "god": 0.3, "human": 2.4},
+            "😴 划水": {"wolf": 1.5, "god": 0.8, "human": 0.7},
+
+            # 中性类
+            "🌟 全场乱打": {"wolf": 0.5, "god": 1.8, "human": 1.7},
+            "🎲 全场乱打": {"wolf": 1.5, "god": 1.2, "human": 1.3},
+            "🔍 疑似好人": {"wolf": 0.5, "god": 1.8, "human": 1.7},
+            "💎 逻辑全错": {"wolf": 1.3, "god": 1.2, "human": 1.5},
+            "🔄 跟风": {"wolf": 1.3, "god": 1.2, "human": 1.5},
+            "🗣️ 话痨": {"wolf": 1.2, "god": 1.5, "human": 1.3},
+            "😤 贴脸": {"wolf": 1.3, "god": 1.2, "human": 1.5},
+            "💢 暴躁": {"wolf": 1.4, "god": 1.1, "human": 1.5},
+            "❓ 身份不明": {"wolf": 1.0, "god": 1.0, "human": 1.0},
+        }
 
         # 定义三角形分组
         self.triangles = {
@@ -241,6 +286,7 @@ class WerewolfProbabilityGUI:
         style.configure('Wolf.TButton', background=self.colors['wolf'], foreground='white')
         style.configure('God.TButton', background=self.colors['god'], foreground='white')
         style.configure('Human.TButton', background=self.colors['human'], foreground='white')
+        style.configure('CustomTag.TButton', background=self.colors['custom_tag'], foreground='white')
 
         # 设置根窗口背景
         self.root.configure(bg=self.colors['bg'])
@@ -298,17 +344,17 @@ class WerewolfProbabilityGUI:
         self.main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 左侧面板（信息输入）
+        # 左侧面板（信息输入）- 修改 weight 为较小的值
         left_frame = ttk.Frame(self.main_paned)
-        self.main_paned.add(left_frame, weight=2)
+        self.main_paned.add(left_frame, weight=1)  # 从 weight=2 改为 weight=1
 
-        # 中间面板（结果显示 + 可视化号码牌）
+        # 中间面板（结果显示 + 可视化号码牌）- 保持较大
         middle_frame = ttk.Frame(self.main_paned)
-        self.main_paned.add(middle_frame, weight=3)
+        self.main_paned.add(middle_frame, weight=4)  # 从 weight=3 改为 weight=4
 
-        # 右侧面板（实时日志 + 三角形分析）
+        # 右侧面板（实时日志 + 三角形分析）- 保持适中
         right_frame = ttk.Frame(self.main_paned)
-        self.main_paned.add(right_frame, weight=2)
+        self.main_paned.add(right_frame, weight=2)  # 保持 weight=2
 
         # 创建顶部工具栏
         self.create_toolbar()
@@ -322,7 +368,7 @@ class WerewolfProbabilityGUI:
         self.create_status_bar()
 
         # 初始化日志
-        self.log("系统初始化完成 - 狼人杀概论计算器 v2.0")
+        self.log("系统初始化完成 - 狼人杀概论计算器 v1.0")
         self.log("三角定律核心：85%概率必有一组三角形有双狼")
         self.log("欢迎使用！请选择身份信息开始计算")
 
@@ -338,7 +384,7 @@ class WerewolfProbabilityGUI:
         ttk.Button(toolbar, text="🗑️ 清空所有信息", command=self.clear_all_info).pack(side=tk.RIGHT, padx=2)
 
         # 版本信息
-        ttk.Label(toolbar, text="v2.0", font=("微软雅黑", 8)).pack(side=tk.RIGHT, padx=10)
+        ttk.Label(toolbar, text="v1.0", font=("微软雅黑", 8)).pack(side=tk.RIGHT, padx=10)
 
     def setup_left_panel(self, parent):
         """设置左侧面板（信息输入）"""
@@ -531,17 +577,29 @@ class WerewolfProbabilityGUI:
                   text="权重值 >1 表示倾向该身份，<1 表示不倾向\n建议范围: 0.1 - 3.0",
                   foreground=self.colors['gold']).pack(pady=5)
 
+        # 玩家选择 + 标签下拉
+        select_frame = ttk.Frame(scrollable_frame)
+        select_frame.pack(fill=tk.X, pady=5, padx=10)
+
         # 玩家选择
-        player_frame = ttk.Frame(scrollable_frame)
-        player_frame.pack(fill=tk.X, pady=10)
-
-        ttk.Label(player_frame, text="选择玩家:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(select_frame, text="选择玩家:").pack(side=tk.LEFT, padx=2)
         self.weight_player_var = tk.StringVar()
-        weight_player_combo = ttk.Combobox(player_frame, textvariable=self.weight_player_var,
-                                           values=self.players, state="readonly", width=10)
-        weight_player_combo.pack(side=tk.LEFT, padx=5)
+        self.weight_player_combo = ttk.Combobox(select_frame, textvariable=self.weight_player_var,
+                                                values=self.players, state="readonly", width=8)
+        self.weight_player_combo.pack(side=tk.LEFT, padx=2)
 
-        # 权重输入
+        # 标签选择
+        ttk.Label(select_frame, text="标签:").pack(side=tk.LEFT, padx=(10, 2))
+        self.tag_preset_var = tk.StringVar()
+
+        # 创建标签列表，包含空白选项
+        tag_list = [""] + list(self.custom_tags.keys())
+        self.tag_preset_combo = ttk.Combobox(select_frame, textvariable=self.tag_preset_var,
+                                             values=tag_list, state="readonly", width=15)
+        self.tag_preset_combo.pack(side=tk.LEFT, padx=2)
+        self.tag_preset_combo.bind('<<ComboboxSelected>>', self.on_tag_selected)
+
+        # 权重值输入
         weight_frame = ttk.LabelFrame(scrollable_frame, text="权重值", padding="10")
         weight_frame.pack(fill=tk.X, pady=10, padx=10)
 
@@ -550,7 +608,7 @@ class WerewolfProbabilityGUI:
         wolf_frame.pack(fill=tk.X, pady=5)
         ttk.Label(wolf_frame, text="🐺 狼权:", foreground=self.colors['wolf'],
                   width=10).pack(side=tk.LEFT)
-        self.wolf_weight = ttk.Entry(wolf_frame, width=15)
+        self.wolf_weight = ttk.Entry(wolf_frame, width=20)
         self.wolf_weight.insert(0, "1.0")
         self.wolf_weight.pack(side=tk.LEFT, padx=5)
 
@@ -559,69 +617,369 @@ class WerewolfProbabilityGUI:
         god_frame.pack(fill=tk.X, pady=5)
         ttk.Label(god_frame, text="👼 神权:", foreground=self.colors['god'],
                   width=10).pack(side=tk.LEFT)
-        self.god_weight = ttk.Entry(god_frame, width=15)
+        self.god_weight = ttk.Entry(god_frame, width=20)
         self.god_weight.insert(0, "1.0")
         self.god_weight.pack(side=tk.LEFT, padx=5)
 
-        # 人权
+        # 民权
         human_frame = ttk.Frame(weight_frame)
         human_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(human_frame, text="👤 人权:", foreground=self.colors['human'],
+        ttk.Label(human_frame, text="👤 民权:", foreground=self.colors['human'],
                   width=10).pack(side=tk.LEFT)
-        self.human_weight = ttk.Entry(human_frame, width=15)
+        self.human_weight = ttk.Entry(human_frame, width=20)
         self.human_weight.insert(0, "1.0")
         self.human_weight.pack(side=tk.LEFT, padx=5)
 
-        # 添加按钮
-        ttk.Button(scrollable_frame, text="⚖️ 应用权重",
-                   command=self.add_behavior_weight,
-                   style='Accent.TButton').pack(pady=15)
+        # 标签提示信息（可选）
+        self.tag_info_label = ttk.Label(scrollable_frame, text="", foreground=self.colors['gold'])
+        self.tag_info_label.pack(fill=tk.X, pady=2, padx=10)
 
-        # 权重预设
-        preset_frame = ttk.LabelFrame(scrollable_frame, text="权重预设", padding="10")
-        preset_frame.pack(fill=tk.X, pady=10, padx=10)
+        # 操作按钮
+        btn_frame = ttk.Frame(scrollable_frame)
+        btn_frame.pack(fill=tk.X, pady=10, padx=10)
 
-        presets = [
-            ("🐺 狼面大", "2.5", "0.5", "0.5"),
-            ("👼 神面大", "0.5", "2.5", "0.8"),
-            ("👤 平民面大", "0.8", "0.8", "2.0"),
-            ("⚖️ 均衡", "1.0", "1.0", "1.0")
-        ]
+        # 应用权重按钮
+        apply_btn = ttk.Button(btn_frame, text="✅应用权重",
+                               command=self.add_behavior_weight,
+                               style='Accent.TButton')
+        apply_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
 
-        for text, wolf, god, human in presets:
-            btn = ttk.Button(preset_frame, text=text,
-                             command=lambda w=wolf, g=god, h=human: self.set_weight_preset(w, g, h))
-            btn.pack(fill=tk.X, pady=2)
+        # 添加/保存标签按钮
+        save_tag_btn = ttk.Button(btn_frame, text="💾添加/保存标签",
+                                  command=self.save_custom_tag,
+                                  style='CustomTag.TButton')
+        save_tag_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
 
-        # 当前权重列表
+        # 删除标签按钮（红色）
+        delete_tag_btn = tk.Button(btn_frame, text="🗑️删除标签",
+                                   command=self.delete_current_tag,
+                                   bg='#ff4444', fg='white',
+                                   font=("微软雅黑", 9),
+                                   relief=tk.RAISED, borderwidth=1)
+        delete_tag_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
         # 当前权重列表
         weight_list_frame = ttk.LabelFrame(scrollable_frame, text="已设置权重", padding="5")
-        weight_list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        weight_list_frame.pack(fill=tk.BOTH, expand=True, pady=10, padx=10)
 
         # 列表框架
         list_container = ttk.Frame(weight_list_frame)
         list_container.pack(fill=tk.BOTH, expand=True)
 
-        self.weight_listbox = tk.Listbox(list_container, height=4,
+        self.weight_listbox = tk.Listbox(list_container, height=6,
                                          bg=self.colors['entry_bg'],
                                          fg=self.colors['fg'],
-                                         selectbackground=self.colors['tree_select'])
+                                         selectbackground=self.colors['tree_select'],
+                                         font=("微软雅黑", 9))
         self.weight_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 添加滚动条
         weight_scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL,
-                                        command=self.weight_listbox.yview)
+                                         command=self.weight_listbox.yview)
         weight_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.weight_listbox.configure(yscrollcommand=weight_scrollbar.set)
 
-        # 按钮框架
-        weight_btn_frame = ttk.Frame(weight_list_frame)
-        weight_btn_frame.pack(fill=tk.X, pady=5)
+        # 绑定选择事件
+        self.weight_listbox.bind('<<ListboxSelect>>', self.on_weight_selected)
 
-        ttk.Button(weight_btn_frame, text="🗑️ 删除选中",
-                  command=self.delete_selected_weight).pack(side=tk.LEFT, padx=2)
-        ttk.Button(weight_btn_frame, text="🔄 清除所有",
-                  command=self.clear_all_weights).pack(side=tk.LEFT, padx=2)
+        # 列表下方按钮
+        list_btn_frame = ttk.Frame(weight_list_frame)
+        list_btn_frame.pack(fill=tk.X, pady=5)
+
+        # 删除选中按钮（保留）
+        delete_selected_btn = ttk.Button(list_btn_frame, text="🗑️ 删除选中",
+                                         command=self.delete_selected_weight)
+        delete_selected_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
+        # 清除所有按钮
+        clear_btn = ttk.Button(list_btn_frame, text="🔄 清除所有",
+                               command=self.clear_all_weights)
+        clear_btn.pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
+    def delete_current_tag(self):
+        """删除当前选中的标签"""
+        tag_name = self.tag_preset_var.get()
+        if not tag_name:
+            messagebox.showwarning("警告", "请先选择要删除的标签")
+            return
+
+        if tag_name not in self.custom_tags:
+            messagebox.showerror("错误", f"标签 '{tag_name}' 不存在")
+            return
+
+        if messagebox.askyesno("确认删除", f"确定要删除标签 '{tag_name}' 吗？"):
+            del self.custom_tags[tag_name]
+
+            # 更新标签选择下拉框（包含空白选项）
+            tag_list = [""] + list(self.custom_tags.keys())
+            self.tag_preset_combo['values'] = tag_list
+
+            # 清空当前选择
+            self.tag_preset_var.set("")
+
+            self.log(f"删除标签: {tag_name}")
+
+    def on_tag_selected(self, event):
+        """标签选择事件 - 自动填充三个权重值"""
+        tag_name = self.tag_preset_var.get()
+        if tag_name and tag_name in self.custom_tags:
+            weights = self.custom_tags[tag_name]
+
+            # 自动填充三个权重输入框
+            self.wolf_weight.delete(0, tk.END)
+            self.wolf_weight.insert(0, str(weights["wolf"]))
+
+            self.god_weight.delete(0, tk.END)
+            self.god_weight.insert(0, str(weights["god"]))
+
+            self.human_weight.delete(0, tk.END)
+            self.human_weight.insert(0, str(weights["human"]))
+
+            # 更新提示信息
+            self.tag_info_label.config(
+                text=f"已加载标签: {tag_name} (狼{weights['wolf']} 神{weights['god']} 人{weights['human']})",
+                foreground=self.colors['gold']
+            )
+
+            self.log(f"加载标签 '{tag_name}': 狼{weights['wolf']} 神{weights['god']} 人{weights['human']}")
+        elif tag_name == "":
+            # 选择了空白标签，不清空输入框，保持当前值
+            self.tag_info_label.config(text="", foreground=self.colors['gold'])
+
+    def on_weight_selected(self, event):
+        """权重列表选择事件 - 加载选中的权重到输入框"""
+        selection = self.weight_listbox.curselection()
+        if selection:
+            text = self.weight_listbox.get(selection[0])
+            try:
+                # 解析文本获取玩家编号和权重
+                # 格式: "玩家X: 狼X.X 神X.X 人X.X"
+                if '玩家' in text:
+                    parts = text.split(':')
+                    player_part = parts[0]
+                    player = int(player_part.replace('玩家', ''))
+
+                    # 解析权重
+                    weight_part = parts[1].strip()
+                    # 使用更安全的方式解析
+                    import re
+                    wolf_match = re.search(r'狼([\d.]+)', weight_part)
+                    god_match = re.search(r'神([\d.]+)', weight_part)
+                    human_match = re.search(r'人([\d.]+)', weight_part)
+
+                    if wolf_match and god_match and human_match:
+                        wolf_weight = wolf_match.group(1)
+                        god_weight = god_match.group(1)
+                        human_weight = human_match.group(1)
+
+                        # 填充到输入框
+                        self.weight_player_var.set(str(player))
+                        self.wolf_weight.delete(0, tk.END)
+                        self.wolf_weight.insert(0, wolf_weight)
+                        self.god_weight.delete(0, tk.END)
+                        self.god_weight.insert(0, god_weight)
+                        self.human_weight.delete(0, tk.END)
+                        self.human_weight.insert(0, human_weight)
+
+                        self.log(f"加载玩家{player}的权重配置")
+            except Exception as e:
+                self.log(f"解析权重失败: {e}")
+
+    def save_custom_tag(self):
+        """保存当前三个权重值为自定义标签"""
+        try:
+            # 获取当前三个权重值
+            wolf_weight = float(self.wolf_weight.get())
+            god_weight = float(self.god_weight.get())
+            human_weight = float(self.human_weight.get())
+
+            # 检查是否选择了标签
+            tag_name = self.tag_preset_var.get()
+
+            # 如果没有选择标签或选择了空白，提示输入新标签名
+            if not tag_name or tag_name == "":
+                # 创建输入对话框
+                dialog = tk.Toplevel(self.root)
+                dialog.title("新建标签")
+                dialog.geometry("300x150")
+                dialog.transient(self.root)
+                dialog.grab_set()
+
+                # 居中显示
+                dialog.update_idletasks()
+                x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
+                y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
+                dialog.geometry(f"+{x}+{y}")
+
+                ttk.Label(dialog, text="请输入标签名称:", font=("微软雅黑", 10)).pack(pady=10)
+
+                tag_entry = ttk.Entry(dialog, width=25, font=("微软雅黑", 10))
+                tag_entry.pack(pady=5)
+                tag_entry.focus()
+
+                def do_save():
+                    new_tag = tag_entry.get().strip()
+                    if new_tag:
+                        # 保存三个权重值
+                        self.custom_tags[new_tag] = {
+                            "wolf": wolf_weight,
+                            "god": god_weight,
+                            "human": human_weight
+                        }
+                        # 更新下拉框（包含空白选项）
+                        tag_list = [""] + list(self.custom_tags.keys())
+                        self.tag_preset_combo['values'] = tag_list
+                        self.tag_preset_var.set(new_tag)
+                        self.log(f"新建标签: {new_tag} (狼{wolf_weight} 神{god_weight} 人{human_weight})")
+                        dialog.destroy()
+                    else:
+                        messagebox.showwarning("警告", "标签名称不能为空")
+
+                def do_cancel():
+                    dialog.destroy()
+
+                btn_frame = ttk.Frame(dialog)
+                btn_frame.pack(pady=10)
+
+                ttk.Button(btn_frame, text="保存", command=do_save).pack(side=tk.LEFT, padx=5)
+                ttk.Button(btn_frame, text="取消", command=do_cancel).pack(side=tk.LEFT, padx=5)
+
+                # 绑定回车键
+                tag_entry.bind('<Return>', lambda e: do_save())
+
+            else:
+                # 更新已有标签
+                if messagebox.askyesno("确认",
+                                       f"是否更新标签 '{tag_name}' 的权重为\n狼{wolf_weight} 神{god_weight} 人{human_weight}？"):
+                    self.custom_tags[tag_name] = {
+                        "wolf": wolf_weight,
+                        "god": god_weight,
+                        "human": human_weight
+                    }
+                    self.log(f"更新标签: {tag_name} (狼{wolf_weight} 神{god_weight} 人{human_weight})")
+
+                    # 更新下拉框（包含空白选项）
+                    tag_list = [""] + list(self.custom_tags.keys())
+                    self.tag_preset_combo['values'] = tag_list
+
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的权重数值")
+
+    def add_behavior_weight(self):
+        """添加行为权重（应用权重）"""
+        try:
+            player = int(self.weight_player_var.get())
+            wolf_weight = float(self.wolf_weight.get())
+            god_weight = float(self.god_weight.get())
+            human_weight = float(self.human_weight.get())
+
+            # 检查是否已存在该玩家的权重
+            old_weights = self.behavior_weights.get(player)
+            if old_weights:
+                self.log(f"更新玩家{player}的权重: 狼{old_weights['狼权']:.1f}->{wolf_weight:.1f}, "
+                         f"神{old_weights['神权']:.1f}->{god_weight:.1f}, "
+                         f"人{old_weights['民权']:.1f}->{human_weight:.1f}")
+            else:
+                self.log(f"添加行为权重: 玩家{player} 狼权={wolf_weight}, 神权={god_weight}, 民权={human_weight}")
+
+            self.behavior_weights[player] = {
+                '狼权': wolf_weight,
+                '神权': god_weight,
+                '民权': human_weight
+            }
+
+            self.update_weight_listbox()
+
+            # 不清空玩家选择，方便继续操作同一个玩家
+
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的玩家编号和权重数值")
+
+    def delete_selected_weight(self):
+        """删除选中的权重"""
+        selection = self.weight_listbox.curselection()
+        if selection:
+            text = self.weight_listbox.get(selection[0])
+            try:
+                # 解析文本获取玩家编号
+                if '玩家' in text:
+                    player = int(text.split('玩家')[1].split(':')[0])
+                    if player in self.behavior_weights:
+                        del self.behavior_weights[player]
+                        self.log(f"删除玩家{player}的行为权重")
+                        self.update_weight_listbox()
+
+                        # 清空输入框
+                        self.weight_player_var.set('')
+                        self.wolf_weight.delete(0, tk.END)
+                        self.wolf_weight.insert(0, "1.0")
+                        self.god_weight.delete(0, tk.END)
+                        self.god_weight.insert(0, "1.0")
+                        self.human_weight.delete(0, tk.END)
+                        self.human_weight.insert(0, "1.0")
+            except:
+                pass
+        else:
+            messagebox.showinfo("提示", "请在列表中选择要删除的权重项")
+
+    def update_weight_listbox(self):
+        """更新权重列表"""
+        self.weight_listbox.delete(0, tk.END)
+
+        for player, weights in sorted(self.behavior_weights.items()):
+            display_text = f"玩家{player}: 狼{weights['狼权']:.1f} 神{weights['神权']:.1f} 人{weights['民权']:.1f}"
+            self.weight_listbox.insert(tk.END, display_text)
+
+    def clear_all_weights(self):
+        """清除所有权重"""
+        if self.behavior_weights:
+            if messagebox.askyesno("确认", "确定要清除所有已设置的权重吗？"):
+                self.behavior_weights.clear()
+                self.update_weight_listbox()
+                self.log("已清除所有行为权重")
+
+                # 清空输入框
+                self.weight_player_var.set('')
+                self.wolf_weight.delete(0, tk.END)
+                self.wolf_weight.insert(0, "1.0")
+                self.god_weight.delete(0, tk.END)
+                self.god_weight.insert(0, "1.0")
+                self.human_weight.delete(0, tk.END)
+                self.human_weight.insert(0, "1.0")
+
+
+
+    def apply_selected_tag(self):
+        """应用选中的标签"""
+        try:
+            player = int(self.weight_player_var.get())
+            tag_name = self.tag_preset_var.get()
+
+            if not tag_name:
+                messagebox.showwarning("警告", "请先选择标签")
+                return
+
+            if tag_name not in self.custom_tags:
+                messagebox.showerror("错误", f"标签 '{tag_name}' 不存在")
+                return
+
+            weight = self.custom_tags[tag_name]
+
+            # 设置权重值（只修改狼权，神权和民权保持1.0）
+            self.wolf_weight.delete(0, tk.END)
+            self.wolf_weight.insert(0, str(weight))
+            self.god_weight.delete(0, tk.END)
+            self.god_weight.insert(0, "1.0")
+            self.human_weight.delete(0, tk.END)
+            self.human_weight.insert(0, "1.0")
+
+            self.log(f"应用标签 '{tag_name}' (权重={weight}) 到玩家{player}")
+
+            # 自动添加权重
+            self.add_behavior_weight()
+
+        except ValueError:
+            messagebox.showwarning("警告", "请先选择玩家编号")
 
     def create_setting_tab(self, parent):
         """创建设置标签页"""
@@ -722,11 +1080,6 @@ class WerewolfProbabilityGUI:
         notebook.add(triangle_frame, text="📐 三角形分析")
         self.create_triangle_tab(triangle_frame)
 
-        # 页面4：基础定律
-        law_frame = ttk.Frame(notebook)
-        notebook.add(law_frame, text="📏 基础定律")
-        self.create_law_tab(law_frame)
-
     def create_visual_tab(self, parent):
         """创建可视化号码牌标签页（仿网易狼人杀）"""
         # 主框架
@@ -738,10 +1091,10 @@ class WerewolfProbabilityGUI:
         title_frame.pack(fill=tk.X, pady=10)
 
         ttk.Label(title_frame, text="玩家号码牌状态",
-                 font=("微软雅黑", 14, "bold")).pack()
+                  font=("微软雅黑", 14, "bold")).pack()
 
         ttk.Label(title_frame, text="点击号码牌可快速选择",
-                 font=("微软雅黑", 9), foreground=self.colors['gold']).pack()
+                  font=("微软雅黑", 9), foreground=self.colors['gold']).pack()
 
         # 创建两列布局
         columns_frame = ttk.Frame(main_frame)
@@ -751,8 +1104,7 @@ class WerewolfProbabilityGUI:
         left_column = ttk.Frame(columns_frame)
         left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
 
-        ttk.Label(left_column, text="",
-                 font=("微软雅黑", 12, "bold")).pack(pady=5)
+        ttk.Label(left_column, text="", font=("微软雅黑", 12, "bold")).pack(pady=5)
 
         # 创建左列6行
         for i in range(1, 7):
@@ -762,8 +1114,7 @@ class WerewolfProbabilityGUI:
         right_column = ttk.Frame(columns_frame)
         right_column.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10)
 
-        ttk.Label(right_column, text="",
-                 font=("微软雅黑", 12, "bold")).pack(pady=5)
+        ttk.Label(right_column, text="", font=("微软雅黑", 12, "bold")).pack(pady=5)
 
         # 创建右列6行
         for i in range(7, 13):
@@ -774,7 +1125,7 @@ class WerewolfProbabilityGUI:
         legend_frame.pack(fill=tk.X, pady=5)
 
         ttk.Label(legend_frame, text="图例: ",
-                 font=("微软雅黑", 10, "bold")).pack(side=tk.LEFT, padx=5)
+                  font=("微软雅黑", 10, "bold")).pack(side=tk.LEFT, padx=5)
 
         # 狼人
         wolf_legend = tk.Frame(legend_frame, bg=self.colors['wolf'], width=20, height=20)
@@ -901,8 +1252,13 @@ class WerewolfProbabilityGUI:
         self.update_player_card(player_num)
 
     def quick_select_player(self, player_num):
-        """快速选择玩家"""
+        """快速选择玩家 - 修复版：同时更新两个页面的玩家选择"""
+        # 更新身份输入页面的玩家选择
         self.player_var.set(str(player_num))
+
+        # 更新权重设置页面的玩家选择
+        self.weight_player_var.set(str(player_num))
+
         self.log(f"快速选择玩家 {player_num}")
 
         # 先清空所有分类的选中状态
@@ -933,6 +1289,63 @@ class WerewolfProbabilityGUI:
 
                         self.log(f"自动选中身份: {role} [分类: {cat}]")
                         break
+
+    def apply_custom_tag(self, tag_name, default_weight):
+        """应用自定义标签"""
+        try:
+            player = int(self.weight_player_var.get())
+
+            # 设置权重值
+            self.wolf_weight.delete(0, tk.END)
+            self.wolf_weight.insert(0, str(default_weight))
+            self.god_weight.delete(0, tk.END)
+            self.god_weight.insert(0, "1.0")
+            self.human_weight.delete(0, tk.END)
+            self.human_weight.insert(0, "1.0")
+
+            self.log(f"应用标签 '{tag_name}' 到玩家{player}，权重={default_weight}")
+
+            # 自动添加权重
+            self.add_behavior_weight()
+
+        except ValueError:
+            messagebox.showwarning("警告", "请先选择玩家编号")
+
+    def add_custom_tag(self):
+        """添加自定义标签"""
+        tag_name = self.new_tag_name.get().strip()
+        if not tag_name:
+            messagebox.showwarning("警告", "请输入标签名称")
+            return
+
+        try:
+            weight = float(self.new_tag_weight.get())
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的权重值")
+            return
+
+        if tag_name in self.custom_tags:
+            if not messagebox.askyesno("确认", f"标签 '{tag_name}' 已存在，是否覆盖？"):
+                return
+
+        self.custom_tags[tag_name] = weight
+
+        # 更新标签按钮显示
+        self.refresh_tag_buttons()
+
+        # 更新删除下拉框
+        self.tag_to_delete['values'] = list(self.custom_tags.keys())
+
+        self.log(f"添加自定义标签: {tag_name} (权重={weight})")
+        self.new_tag_name.delete(0, tk.END)
+
+    def refresh_tag_buttons(self):
+        """刷新标签按钮显示"""
+        # 重新创建标签按钮（简化版本，实际应该重新布局）
+        # 注意：由于按钮在scrollable_frame中，这里需要找到正确的父容器重新创建
+        # 为了简化，我们可以重新加载整个权重标签页
+        # 这里使用简单的方法：弹出提示让用户重启应用或重新加载
+        messagebox.showinfo("提示", "标签已更新，建议重启应用以刷新界面")
 
     def update_player_card(self, player_num):
         """更新单个玩家卡片的显示"""
@@ -1053,32 +1466,40 @@ class WerewolfProbabilityGUI:
                             continue
 
             elif result_type == "三角定律":
-                # 三角定律只更新狼人概率
-                for player_num, prob in results.items():
+                # 三角定律更新所有概率
+                for player_num, probs in results.items():
                     wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
                     god_label = self.player_labels.get(f"{player_num}_god_prob")
                     human_label = self.player_labels.get(f"{player_num}_human_prob")
 
+                    wolf_prob = probs.get('狼人', 0)
+                    god_prob = probs.get('神职', 0)
+                    human_prob = probs.get('平民', 0)
+
                     if wolf_label:
-                        wolf_label.config(text=f"🐺{prob:.1%}")
+                        wolf_label.config(text=f"🐺{wolf_prob:.1%}")
                     if god_label:
-                        god_label.config(text="👼-")
+                        god_label.config(text=f"👼{god_prob:.1%}")
                     if human_label:
-                        human_label.config(text="👤-")
+                        human_label.config(text=f"👤{human_prob:.1%}")
 
             elif result_type == "贝叶斯":
-                # 贝叶斯只更新狼人概率
-                for player_num, prob in results.items():
+                # 贝叶斯更新所有概率
+                for player_num, probs in results.items():
                     wolf_label = self.player_labels.get(f"{player_num}_wolf_prob")
                     god_label = self.player_labels.get(f"{player_num}_god_prob")
                     human_label = self.player_labels.get(f"{player_num}_human_prob")
 
+                    wolf_prob = probs.get('狼人', 0)
+                    god_prob = probs.get('神职', 0)
+                    human_prob = probs.get('平民', 0)
+
                     if wolf_label:
-                        wolf_label.config(text=f"🐺{prob:.1%}")
+                        wolf_label.config(text=f"🐺{wolf_prob:.1%}")
                     if god_label:
-                        god_label.config(text="👼-")
+                        god_label.config(text=f"👼{god_prob:.1%}")
                     if human_label:
-                        human_label.config(text="👤-")
+                        human_label.config(text=f"👤{human_prob:.1%}")
 
             elif result_type == "综合分析":
                 # 综合分析更新所有概率
@@ -1195,7 +1616,7 @@ class WerewolfProbabilityGUI:
         self.calculate_basic_probabilities()
 
     def setup_right_panel(self, parent):
-        """设置右侧面板（实时日志）"""
+        """设置右侧面板（实时日志 + 基础定律 + 发言记录）"""
         # 创建Notebook
         notebook = ttk.Notebook(parent)
         notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -1205,15 +1626,386 @@ class WerewolfProbabilityGUI:
         notebook.add(log_frame, text="📝 实时日志")
         self.create_log_tab(log_frame)
 
-        # 页面2：学习资源
-        resource_frame = ttk.Frame(notebook)
-        notebook.add(resource_frame, text="📚 学习资源")
-        self.create_resource_tab(resource_frame)
+        # 页面2：基础定律（原学习资源位置）
+        law_frame = ttk.Frame(notebook)
+        notebook.add(law_frame, text="📏 基础定律")
+        self.create_law_tab_right(law_frame)
 
-        # 页面3：关于
+        # 页面3：发言记录（新增）
+        speech_frame = ttk.Frame(notebook)
+        notebook.add(speech_frame, text="💬 发言记录")
+        self.create_speech_tab(speech_frame)
+
+        # 页面4：关于
         about_frame = ttk.Frame(notebook)
         notebook.add(about_frame, text="ℹ️ 关于")
         self.create_about_tab(about_frame)
+
+    def create_law_tab_right(self, parent):
+        """创建右侧基础定律标签页"""
+        # 创建主框架
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # 文本显示区域
+        self.law_right_text = scrolledtext.ScrolledText(main_frame,
+                                                        bg=self.colors['entry_bg'],
+                                                        fg=self.colors['fg'],
+                                                        font=("Consolas", 10),
+                                                        height=20,
+                                                        wrap=tk.WORD)
+        self.law_right_text.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        # 配置标签
+        self.law_right_text.tag_config("bold", font=("Consolas", 10, "bold"))
+        self.law_right_text.tag_config("title", font=("Consolas", 11, "bold"), foreground=self.colors['gold'])
+        self.law_right_text.tag_config("wolf", foreground=self.colors['wolf'])
+        self.law_right_text.tag_config("god", foreground=self.colors['god'])
+        self.law_right_text.tag_config("human", foreground=self.colors['human'])
+
+        # 按钮框架
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Button(btn_frame, text="🔄 刷新定律",
+                   command=self.calculate_basic_probabilities_right,
+                   style='Accent.TButton').pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
+        ttk.Button(btn_frame, text="📋 复制内容",
+                   command=lambda: self.copy_text_to_clipboard(self.law_right_text)).pack(side=tk.LEFT, padx=2,
+                                                                                          expand=True, fill=tk.X)
+
+        # 初始化基础定律显示
+        self.calculate_basic_probabilities_right()
+
+    def create_speech_tab(self, parent):
+        """创建发言记录标签页"""
+        # 创建主框架
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # 说明标签
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(info_frame, text="📝 玩家发言记录",
+                  font=("微软雅黑", 11, "bold")).pack(side=tk.LEFT)
+
+        ttk.Label(info_frame, text="(可记录每轮发言，用于分析)",
+                  font=("微软雅黑", 9), foreground=self.colors['gold']).pack(side=tk.LEFT, padx=10)
+
+        # 玩家选择框架
+        select_frame = ttk.Frame(main_frame)
+        select_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(select_frame, text="选择玩家:", font=("微软雅黑", 10)).pack(side=tk.LEFT, padx=2)
+
+        self.speech_player_var = tk.StringVar()
+        self.speech_player_combo = ttk.Combobox(select_frame,
+                                                textvariable=self.speech_player_var,
+                                                values=self.players,
+                                                state="readonly",
+                                                width=10)
+        self.speech_player_combo.pack(side=tk.LEFT, padx=5)
+        self.speech_player_combo.bind('<<ComboboxSelected>>', self.on_speech_player_selected)
+
+        ttk.Label(select_frame, text="轮次:", font=("微软雅黑", 10)).pack(side=tk.LEFT, padx=(20, 2))
+
+        self.speech_round_var = tk.StringVar(value="第1轮")
+        round_values = [f"第{i}轮" for i in range(1, 11)] + ["警上", "警下", "遗言", "总结"]
+        self.speech_round_combo = ttk.Combobox(select_frame,
+                                               textvariable=self.speech_round_var,
+                                               values=round_values,
+                                               state="readonly",
+                                               width=8)
+        self.speech_round_combo.pack(side=tk.LEFT, padx=5)
+
+        # 发言记录文本框
+        text_frame = ttk.LabelFrame(main_frame, text="发言内容", padding="5")
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        self.speech_text = scrolledtext.ScrolledText(text_frame,
+                                                     bg=self.colors['entry_bg'],
+                                                     fg=self.colors['fg'],
+                                                     insertbackground=self.colors['fg'],
+                                                     font=("微软雅黑", 10),
+                                                     height=12,
+                                                     wrap=tk.WORD,
+                                                     undo=True)
+        self.speech_text.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        # 按钮框架
+        btn_frame1 = ttk.Frame(main_frame)
+        btn_frame1.pack(fill=tk.X, pady=5)
+
+        ttk.Button(btn_frame1, text="💾 保存发言",
+                   command=self.save_speech,
+                   style='Accent.TButton').pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
+        ttk.Button(btn_frame1, text="🔄 清空当前",
+                   command=self.clear_current_speech).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
+
+        # 发言记录列表
+        list_frame = ttk.LabelFrame(main_frame, text="已保存的发言记录", padding="5")
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        # 创建左右布局
+        list_container = ttk.Frame(list_frame)
+        list_container.pack(fill=tk.BOTH, expand=True)
+
+        # 左侧：记录列表
+        left_list = ttk.Frame(list_container)
+        left_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.speech_listbox = tk.Listbox(left_list,
+                                         height=6,
+                                         bg=self.colors['entry_bg'],
+                                         fg=self.colors['fg'],
+                                         selectbackground=self.colors['tree_select'],
+                                         font=("微软雅黑", 9))
+        self.speech_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        list_scrollbar = ttk.Scrollbar(left_list, orient=tk.VERTICAL,
+                                       command=self.speech_listbox.yview)
+        list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.speech_listbox.configure(yscrollcommand=list_scrollbar.set)
+
+        # 绑定选择事件
+        self.speech_listbox.bind('<<ListboxSelect>>', self.on_speech_record_selected)
+
+        # 右侧：操作按钮
+        right_btn = ttk.Frame(list_container)
+        right_btn.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
+
+        ttk.Button(right_btn, text="查看",
+                   command=self.view_speech_record,
+                   width=8).pack(pady=2)
+
+        ttk.Button(right_btn, text="删除",
+                   command=self.delete_speech_record,
+                   width=8).pack(pady=2)
+
+        # 底部按钮框架
+        btn_frame2 = ttk.Frame(main_frame)
+        btn_frame2.pack(fill=tk.X, pady=5)
+
+        ttk.Button(btn_frame2, text="🗑️ 清空所有记录",
+                   command=self.clear_all_speech_records).pack(side=tk.RIGHT, padx=2)
+
+        # 存储发言记录的数据结构
+        self.speech_records = {}  # 格式: {(player, round): "发言内容"}
+
+    def on_speech_player_selected(self, event):
+        """发言记录玩家选择事件"""
+        player = self.speech_player_var.get()
+        round_text = self.speech_round_var.get()
+
+        if player and round_text:
+            self.load_speech_record(int(player), round_text)
+
+    def load_speech_record(self, player, round_text):
+        """加载指定玩家和轮次的发言记录"""
+        key = (player, round_text)
+        if key in self.speech_records:
+            self.speech_text.delete(1.0, tk.END)
+            self.speech_text.insert(1.0, self.speech_records[key])
+            self.log(f"加载发言记录: 玩家{player} {round_text}")
+        else:
+            self.speech_text.delete(1.0, tk.END)
+
+    def save_speech(self):
+        """保存发言记录"""
+        try:
+            player = int(self.speech_player_var.get())
+            round_text = self.speech_round_var.get()
+            content = self.speech_text.get(1.0, tk.END).strip()
+
+            if not content:
+                messagebox.showwarning("警告", "发言内容不能为空")
+                return
+
+            key = (player, round_text)
+            old_content = self.speech_records.get(key)
+
+            self.speech_records[key] = content
+            self.update_speech_listbox()
+
+            if old_content:
+                self.log(f"更新发言记录: 玩家{player} {round_text}")
+            else:
+                self.log(f"保存发言记录: 玩家{player} {round_text}")
+
+            # 自动在日志中显示发言内容摘要
+            summary = content[:50] + "..." if len(content) > 50 else content
+            self.log(f"  内容: {summary}")
+
+        except ValueError:
+            messagebox.showwarning("警告", "请选择玩家编号")
+
+    def update_speech_listbox(self):
+        """更新发言记录列表"""
+        self.speech_listbox.delete(0, tk.END)
+
+        # 按玩家和轮次排序显示
+        sorted_keys = sorted(self.speech_records.keys(),
+                             key=lambda x: (x[0], x[1]))
+
+        for player, round_text in sorted_keys:
+            display_text = f"玩家{player} - {round_text}"
+            self.speech_listbox.insert(tk.END, display_text)
+
+    def on_speech_record_selected(self, event):
+        """发言记录选择事件"""
+        selection = self.speech_listbox.curselection()
+        if selection:
+            text = self.speech_listbox.get(selection[0])
+            try:
+                # 解析文本获取玩家和轮次
+                parts = text.split(" - ")
+                player_part = parts[0]
+                round_text = parts[1]
+
+                player = int(player_part.replace("玩家", ""))
+
+                self.speech_player_var.set(str(player))
+                self.speech_round_var.set(round_text)
+                self.load_speech_record(player, round_text)
+            except:
+                pass
+
+    def view_speech_record(self):
+        """查看选中的发言记录"""
+        selection = self.speech_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("提示", "请先在列表中选择要查看的记录")
+            return
+
+        # 已经通过选择事件自动加载了，这里只需要弹出对话框显示完整内容
+        text = self.speech_listbox.get(selection[0])
+        try:
+            parts = text.split(" - ")
+            player_part = parts[0]
+            round_text = parts[1]
+            player = int(player_part.replace("玩家", ""))
+            key = (player, round_text)
+
+            if key in self.speech_records:
+                content = self.speech_records[key]
+
+                # 创建新窗口显示完整内容
+                dialog = tk.Toplevel(self.root)
+                dialog.title(f"玩家{player} {round_text} 发言记录")
+                dialog.geometry("500x400")
+                dialog.transient(self.root)
+
+                text_widget = scrolledtext.ScrolledText(dialog,
+                                                        bg=self.colors['entry_bg'],
+                                                        fg=self.colors['fg'],
+                                                        font=("微软雅黑", 10),
+                                                        wrap=tk.WORD)
+                text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                text_widget.insert(1.0, content)
+                text_widget.config(state=tk.DISABLED)
+
+                ttk.Button(dialog, text="关闭",
+                           command=dialog.destroy).pack(pady=5)
+        except:
+            pass
+
+    def delete_speech_record(self):
+        """删除选中的发言记录"""
+        selection = self.speech_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("提示", "请先在列表中选择要删除的记录")
+            return
+
+        text = self.speech_listbox.get(selection[0])
+        try:
+            parts = text.split(" - ")
+            player_part = parts[0]
+            round_text = parts[1]
+            player = int(player_part.replace("玩家", ""))
+            key = (player, round_text)
+
+            if messagebox.askyesno("确认删除", f"确定要删除玩家{player} {round_text}的发言记录吗？"):
+                del self.speech_records[key]
+                self.update_speech_listbox()
+
+                # 如果当前显示的就是这条记录，清空显示
+                current_player = self.speech_player_var.get()
+                current_round = self.speech_round_var.get()
+                if current_player and current_round:
+                    if int(current_player) == player and current_round == round_text:
+                        self.speech_text.delete(1.0, tk.END)
+
+                self.log(f"删除发言记录: 玩家{player} {round_text}")
+        except:
+            pass
+
+    def clear_current_speech(self):
+        """清空当前发言输入框"""
+        if self.speech_text.get(1.0, tk.END).strip():
+            if messagebox.askyesno("确认", "确定要清空当前输入内容吗？"):
+                self.speech_text.delete(1.0, tk.END)
+
+    def clear_all_speech_records(self):
+        """清空所有发言记录"""
+        if self.speech_records:
+            if messagebox.askyesno("确认", f"确定要清空所有{len(self.speech_records)}条发言记录吗？"):
+                self.speech_records.clear()
+                self.speech_listbox.delete(0, tk.END)
+                self.speech_text.delete(1.0, tk.END)
+                self.log("已清空所有发言记录")
+
+    def copy_text_to_clipboard(self, text_widget):
+        """复制文本内容到剪贴板"""
+        try:
+            content = text_widget.get(1.0, tk.END)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.log("内容已复制到剪贴板")
+            messagebox.showinfo("提示", "内容已复制到剪贴板")
+        except Exception as e:
+            self.log(f"复制失败: {e}")
+            messagebox.showerror("错误", f"复制失败: {e}")
+
+    def calculate_basic_probabilities_right(self):
+        """计算基础概率（右侧显示版）"""
+        self.law_right_text.delete(1.0, tk.END)
+
+        # 标题
+        self.law_right_text.insert(tk.END, "📐 三角定律分布\n", "title")
+        self.law_right_text.insert(tk.END, "─" * 40 + "\n")
+
+        # 三角定律
+        tri_probs = self.calculate_triangle_probabilities()
+        for case, prob in tri_probs.items():
+            self.law_right_text.insert(tk.END, f"{case}: {prob:.1%}\n")
+
+        prob_double = 1 - tri_probs.get("四个三角各1狼", 0)
+        self.law_right_text.insert(tk.END, f"\n✅ 至少一组双狼: {prob_double:.1%}\n\n")
+
+        # 三行定律
+        self.law_right_text.insert(tk.END, "📏 三行定律\n", "title")
+        self.law_right_text.insert(tk.END, "─" * 40 + "\n")
+
+        row_prob = self.calculate_row_probability()
+        self.law_right_text.insert(tk.END, f"连续三行有≥3狼: {row_prob:.1%}\n\n")
+
+        # 四角定律
+        self.law_right_text.insert(tk.END, "🔲 四角定律\n", "title")
+        self.law_right_text.insert(tk.END, "─" * 40 + "\n")
+
+        corner_probs = self.calculate_corner_probabilities()
+        for k, v in corner_probs.items():
+            self.law_right_text.insert(tk.END, f"单组{k}狼: {v:.1%}\n")
+
+        # 添加组合数学说明
+        self.law_right_text.insert(tk.END, "\n" + "─" * 40 + "\n")
+        self.law_right_text.insert(tk.END, "📊 组合数学\n", "title")
+        self.law_right_text.insert(tk.END, f"总组合数: C(12,4) = 495\n")
+        self.law_right_text.insert(tk.END, f"每组各1狼: 81/495 = {81 / 495:.2%}\n")
+        self.law_right_text.insert(tk.END, f"至少一组双狼: {1 - 81 / 495:.2%}\n")
 
     def create_log_tab(self, parent):
         """创建日志标签页"""
@@ -1275,43 +2067,85 @@ class WerewolfProbabilityGUI:
 
     def create_about_tab(self, parent):
         """创建关于标签页"""
+        # 创建主框架
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # 创建文本框用于显示说明文字
+        text_widget = tk.Text(main_frame, wrap=tk.WORD, font=('微软雅黑', 10),
+                              bg='#f0f0f0', relief=tk.FLAT, borderwidth=0)
+        text_widget.pack(fill=tk.BOTH, expand=True)
+
         about_text = """
-╔════════════════════════════════════════╗
-║     狼人杀概论计算器 v2.0              ║
-║     Werewolf Probability Calculator     ║
-╚════════════════════════════════════════╝
+    ╔═══════════════════════════════════════╗
+    ║            狼人杀概论计算器 v1.0                
+    ║            Werewolf Probability Calculator   
+    ╚═══════════════════════════════════════╝
 
-【主要特性】
-• 支持多种身份类型
-  - 好人标记：金水/银水/铜水/爆水/花露水
-  - 狼人：狼人/狼王/白狼王/狼美人/石像鬼等
-  - 神职：预言家/女巫/猎人/愚者/守卫等
-  - 平民：平民/混血儿/暗恋者/羊驼
+    【主要特性】
+    • 支持多种身份类型
+      - 好人标记：金水/银水/铜水/爆水/花露水
+      - 狼人：狼人/狼王/白狼王/狼美人/石像鬼等
+      - 神职：预言家/女巫/猎人/愚者/守卫等
+      - 平民：平民/混血儿/暗恋者/羊驼
 
-• 多种概率算法
-  - 蒙特卡洛模拟
-  - 三角定律（85%双狼定理）
-  - 贝叶斯更新（狼权/神权/人权）
-  - 综合分析
+    • 多种概率算法
+      - 蒙特卡洛模拟
+      - 三角定律（85%双狼定理）
+      - 贝叶斯更新（狼权/神权/民权）
+      - 综合分析
 
-• 可视化界面
-  - 仿网易狼人杀号码牌布局
-  - 点击卡片快速选择玩家
-  - 实时身份状态显示
+    • 可视化界面
+      - 仿网易狼人杀号码牌布局
+      - 点击卡片快速选择玩家
+      - 实时身份状态显示
 
-【数学原理】
-总组合数：C(12,4) = 495
-每组各1狼概率：81/495 = 16.36%
-至少一组双狼概率：83.64%
+    • 自定义标签系统
+      - 可添加任意行为标签
+      - 每个标签有独立权重
+      - 标签无阵营之分
 
-【版本信息】
-版本：v2.0
-发布日期：2026年3月
+    【数学原理】
+    总组合数：C(12,4) = 495
+    每组各1狼概率：81/495 = 16.36%
+    至少一组双狼概率：83.64%
+
+    【下载地址】
+    GitHub: https://github.com/Haisi-1536/Werewolves
+
+    【版本信息】
+    版本：v1.0
+    发布日期：2026年3月
         """
 
-        about_label = ttk.Label(parent, text=about_text, justify=tk.LEFT,
-                                font=("Consolas", 10))
-        about_label.pack(padx=20, pady=20)
+        # 插入文本
+        text_widget.insert(tk.END, about_text)
+
+        # 找到GitHub链接的位置并添加标签
+        start_pos = about_text.find("https://github.com/Haisi-1536/Werewolves")
+        if start_pos != -1:
+            # 计算在文本框中的位置
+            line_count = len(about_text[:start_pos].split('\n'))
+            char_count = len(about_text[:start_pos].split('\n')[-1])
+
+            start_index = f"{line_count}.{char_count}"
+            end_index = f"{line_count}.{char_count + len('https://github.com/Haisi-1536/Werewolves')}"
+
+            # 添加链接标签
+            text_widget.tag_add("hyperlink", start_index, end_index)
+            text_widget.tag_config("hyperlink", foreground="blue", underline=True)
+
+            # 绑定点击事件
+            def open_link(event):
+                import webbrowser
+                webbrowser.open("https://github.com/Haisi-1536/Werewolves")
+
+            text_widget.tag_bind("hyperlink", "<Button-1>", open_link)
+            text_widget.tag_bind("hyperlink", "<Enter>", lambda e: text_widget.config(cursor="hand2"))
+            text_widget.tag_bind("hyperlink", "<Leave>", lambda e: text_widget.config(cursor=""))
+
+        # 设置为只读
+        text_widget.config(state=tk.DISABLED)
 
     def create_status_bar(self):
         """创建状态栏"""
@@ -1497,11 +2331,11 @@ class WerewolfProbabilityGUI:
             self.behavior_weights[player] = {
                 '狼权': wolf_weight,
                 '神权': god_weight,
-                '人权': human_weight
+                '民权': human_weight
             }
 
             self.update_weight_listbox()
-            self.log(f"添加行为权重: 玩家{player} 狼权={wolf_weight}, 神权={god_weight}, 人权={human_weight}")
+            self.log(f"添加行为权重: 玩家{player} 狼权={wolf_weight}, 神权={god_weight}, 民权={human_weight}")
 
             # 清空选择
             self.weight_player_var.set('')
@@ -1530,6 +2364,7 @@ class WerewolfProbabilityGUI:
         self.behavior_weights.clear()
         self.update_weight_listbox()
         self.log("已清除所有行为权重")
+
     def update_info_listbox(self):
         """更新信息列表"""
         self.info_listbox.delete(0, tk.END)
@@ -1557,7 +2392,7 @@ class WerewolfProbabilityGUI:
         self.weight_listbox.delete(0, tk.END)
 
         for player, weights in sorted(self.behavior_weights.items()):
-            display_text = f"玩家{player}: 狼{weights['狼权']:.1f} 神{weights['神权']:.1f} 人{weights['人权']:.1f}"
+            display_text = f"玩家{player}: 狼{weights['狼权']:.1f} 神{weights['神权']:.1f} 人{weights['民权']:.1f}"
             self.weight_listbox.insert(tk.END, display_text)
             self.clear_all_info
 
@@ -1930,7 +2765,7 @@ class WerewolfProbabilityGUI:
             self.log(f"错误: {str(e)}")
 
     def run_triangle_law(self):
-        """运行三角定律计算"""
+        """运行三角定律计算 - 同时计算三类身份概率"""
         try:
             sim_count = self.simulation_count
             self.log(f"开始三角定律计算，次数: {sim_count}")
@@ -1945,65 +2780,126 @@ class WerewolfProbabilityGUI:
                 messagebox.showinfo("提示", "没有未知玩家需要计算")
                 return
 
-            # 统计已知狼人
+            # 统计已知身份数量
             known_wolves = sum(1 for info in self.known_info.values() if info.get("type") == "wolf")
+            known_gods = sum(1 for info in self.known_info.values() if info.get("type") == "god")
+            known_humans = sum(1 for info in self.known_info.values() if info.get("type") == "human")
+            known_marks = sum(1 for info in self.known_info.values() if info.get("type") == "good_mark")
+
             remaining_wolves = self.wolves - known_wolves
+            remaining_gods = self.gods - known_gods
+            remaining_humans = self.villagers - known_humans
 
             # 计数器
-            wolf_counts = defaultdict(int)
+            role_counts = {p: {'狼人': 0, '神职': 0, '平民': 0} for p in unknown_players}
 
             # 计算三角形权重
             triangle_weights = self.calculate_triangle_weights()
 
             for i in range(sim_count):
-                wolves_chosen = set()
                 available_players = unknown_players.copy()
 
-                while len(wolves_chosen) < remaining_wolves:
-                    player_weights = []
-                    for player in available_players:
-                        if player not in wolves_chosen:
-                            tri = self.get_player_triangle(player)
-                            weight = triangle_weights.get(tri, 1.0)
-                            if self.use_behavior_weight and player in self.behavior_weights:
-                                weight *= self.behavior_weights[player].get('狼权', 1.0)
-                            player_weights.append(weight)
+                # 计算剩余身份数量（包括好人标记的分配）
+                gods_to_assign = remaining_gods
+                humans_to_assign = remaining_humans
 
-                    if player_weights:
-                        total = sum(player_weights)
-                        probs = [w / total for w in player_weights]
-                        chosen = random.choices(available_players, weights=probs)[0]
-                        wolves_chosen.add(chosen)
-                        available_players.remove(chosen)
+                # 随机分配好人标记
+                if known_marks > 0:
+                    gods_from_marks = random.randint(0, known_marks)
+                    gods_to_assign += gods_from_marks
+                    humans_to_assign += (known_marks - gods_from_marks)
 
-                for wolf in wolves_chosen:
-                    wolf_counts[wolf] += 1
+                total_remaining = len(unknown_players)
+
+                # 构建身份池
+                identity_pool = []
+                identity_pool.extend(['狼人'] * remaining_wolves)
+                identity_pool.extend(['神职'] * gods_to_assign)
+                identity_pool.extend(['平民'] * humans_to_assign)
+                random.shuffle(identity_pool)
+
+                # 根据权重分配身份
+                assigned_roles = {}
+
+                # 先分配狼人（带权重）
+                wolves_assigned = 0
+                temp_players = available_players.copy()
+
+                while wolves_assigned < remaining_wolves:
+                    if not temp_players:
+                        break
+
+                    weights = []
+                    for player in temp_players:
+                        tri = self.get_player_triangle(player)
+                        weight = triangle_weights.get(tri, 1.0)
+                        if self.use_behavior_weight and player in self.behavior_weights:
+                            weight *= self.behavior_weights[player].get('狼权', 1.0)
+                        weights.append(weight)
+
+                    total = sum(weights)
+                    if total > 0:
+                        probs = [w / total for w in weights]
+                        chosen = random.choices(temp_players, weights=probs)[0]
+                    else:
+                        chosen = random.choice(temp_players)
+
+                    assigned_roles[chosen] = '狼人'
+                    temp_players.remove(chosen)
+                    wolves_assigned += 1
+
+                # 分配神职和平民
+                remaining_for_others = [p for p in available_players if p not in assigned_roles]
+                other_roles = [r for r in identity_pool if r != '狼人']
+                random.shuffle(other_roles)
+
+                for player, role in zip(remaining_for_others, other_roles):
+                    assigned_roles[player] = role
+
+                # 统计
+                for player, role in assigned_roles.items():
+                    if role == '狼人':
+                        role_counts[player]['狼人'] += 1
+                    elif role == '神职':
+                        role_counts[player]['神职'] += 1
+                    else:  # 平民
+                        role_counts[player]['平民'] += 1
+
+                # 显示进度
+                if (i + 1) % 10000 == 0:
+                    self.log(f"三角定律模拟进度: {i + 1}/{sim_count}")
 
             # 显示结果
             for player in unknown_players:
-                prob = wolf_counts[player] / sim_count
+                wolf_prob = role_counts[player]['狼人'] / sim_count
+                god_prob = role_counts[player]['神职'] / sim_count
+                human_prob = role_counts[player]['平民'] / sim_count
                 triangle = self.get_player_triangle(player)
 
-                if prob > 0.4:
+                # 根据狼人概率添加标签
+                if wolf_prob > 0.4:
                     tag = 'high'
-                elif prob > 0.25:
+                elif wolf_prob > 0.25:
                     tag = 'medium'
                 else:
                     tag = 'low'
 
                 self.tree.insert('', tk.END, values=(
                     f"玩家{player}",
-                    f"{prob:.1%}",
-                    "-",
-                    "-",
+                    f"{wolf_prob:.1%}",
+                    f"{god_prob:.1%}",
+                    f"{human_prob:.1%}",
                     triangle
                 ), tags=(tag,))
 
             # 收集结果用于概率显示
             tri_results = {}
             for player in unknown_players:
-                prob = wolf_counts[player] / sim_count
-                tri_results[player] = prob
+                tri_results[player] = {
+                    '狼人': role_counts[player]['狼人'] / sim_count,
+                    '神职': role_counts[player]['神职'] / sim_count,
+                    '平民': role_counts[player]['平民'] / sim_count
+                }
 
             # 更新卡片概率显示
             self.update_card_probabilities(tri_results, "三角定律")
@@ -2012,6 +2908,7 @@ class WerewolfProbabilityGUI:
 
         except Exception as e:
             messagebox.showerror("错误", f"计算过程中出现错误: {str(e)}")
+            self.log(f"错误: {str(e)}")
 
     def calculate_triangle_weights(self):
         """计算三角形权重"""
@@ -2062,7 +2959,7 @@ class WerewolfProbabilityGUI:
         return triangle_weights
 
     def run_bayesian_update(self):
-        """运行贝叶斯更新"""
+        """运行贝叶斯更新 - 同时计算三类身份概率"""
         try:
             self.log("开始贝叶斯更新计算")
 
@@ -2076,61 +2973,103 @@ class WerewolfProbabilityGUI:
                 messagebox.showinfo("提示", "没有未知玩家需要计算")
                 return
 
-            # 基础先验概率
+            # 统计已知身份数量
             known_wolves = sum(1 for info in self.known_info.values() if info.get("type") == "wolf")
+            known_gods = sum(1 for info in self.known_info.values() if info.get("type") == "god")
+            known_humans = sum(1 for info in self.known_info.values() if info.get("type") == "human")
+            known_marks = sum(1 for info in self.known_info.values() if info.get("type") == "good_mark")
+
             remaining_wolves = self.wolves - known_wolves
-            base_prob = remaining_wolves / len(unknown_players) if unknown_players else 0
+            remaining_gods = self.gods - known_gods
+            remaining_humans = self.villagers - known_humans
+
+            # 好人标记的分配预估
+            if known_marks > 0:
+                # 假设好人标记平均分配到神职和平民
+                gods_from_marks = known_marks // 2
+                remaining_gods += gods_from_marks
+                remaining_humans += (known_marks - gods_from_marks)
+
+            total_unknown = len(unknown_players)
+
+            # 基础先验概率
+            base_wolf_prob = remaining_wolves / total_unknown if total_unknown > 0 else 0
+            base_god_prob = remaining_gods / total_unknown if total_unknown > 0 else 0
+            base_human_prob = remaining_humans / total_unknown if total_unknown > 0 else 0
 
             # 获取三角形权重
-            triangle_weights = self.calculate_triangle_weights() if self.use_triangle_law else {p: 1.0 for p in
-                                                                                                unknown_players}
+            triangle_weights = self.calculate_triangle_weights() if self.use_triangle_law else {}
 
             results = {}
 
             for player in unknown_players:
-                prob = base_prob
+                wolf_prob = base_wolf_prob
+                god_prob = base_god_prob
+                human_prob = base_human_prob
 
                 # 三角形定律调整
                 if self.use_triangle_law:
                     tri = self.get_player_triangle(player)
                     tri_weight = triangle_weights.get(tri, 1.0)
-                    prob *= tri_weight
+                    # 三角形权重影响狼人概率
+                    wolf_prob *= tri_weight
+
+                    # 重新归一化
+                    total = wolf_prob + god_prob + human_prob
+                    if total > 0:
+                        wolf_prob /= total
+                        god_prob /= total
+                        human_prob /= total
 
                 # 行为权重贝叶斯更新
                 if self.use_behavior_weight and player in self.behavior_weights:
                     weights = self.behavior_weights[player]
                     wolf_weight = weights.get('狼权', 1.0)
                     god_weight = weights.get('神权', 1.0)
-                    human_weight = weights.get('人权', 1.0)
+                    human_weight = weights.get('民权', 1.0)
 
                     total_weight = wolf_weight + god_weight + human_weight
                     if total_weight > 0:
-                        wolf_factor = wolf_weight / (total_weight / 3)
-                        good_factor = (god_weight + human_weight) / (total_weight * 2 / 3)
+                        # 计算各个身份的似然因子
+                        wolf_likelihood = wolf_weight / (total_weight / 3)
+                        god_likelihood = god_weight / (total_weight / 3)
+                        human_likelihood = human_weight / (total_weight / 3)
 
-                        numerator = prob * wolf_factor
-                        denominator = numerator + (1 - prob) * good_factor
-                        prob = numerator / denominator if denominator > 0 else prob
+                        # 贝叶斯更新
+                        new_wolf = wolf_prob * wolf_likelihood
+                        new_god = god_prob * god_likelihood
+                        new_human = human_prob * human_likelihood
 
-                prob = min(prob, 0.8)
-                results[player] = prob
+                        # 归一化
+                        total = new_wolf + new_god + new_human
+                        if total > 0:
+                            wolf_prob = new_wolf / total
+                            god_prob = new_god / total
+                            human_prob = new_human / total
+
+                results[player] = {
+                    '狼人': wolf_prob,
+                    '神职': god_prob,
+                    '平民': human_prob
+                }
 
             # 显示结果
-            for player, prob in sorted(results.items(), key=lambda x: x[1], reverse=True):
+            for player, probs in sorted(results.items(), key=lambda x: x[1]['狼人'], reverse=True):
                 triangle = self.get_player_triangle(player)
+                wolf_prob = probs['狼人']
 
-                if prob > 0.4:
+                if wolf_prob > 0.4:
                     tag = 'high'
-                elif prob > 0.25:
+                elif wolf_prob > 0.25:
                     tag = 'medium'
                 else:
                     tag = 'low'
 
                 self.tree.insert('', tk.END, values=(
                     f"玩家{player}",
-                    f"{prob:.1%}",
-                    "-",
-                    "-",
+                    f"{wolf_prob:.1%}",
+                    f"{probs['神职']:.1%}",
+                    f"{probs['平民']:.1%}",
                     triangle
                 ), tags=(tag,))
 
@@ -2141,6 +3080,7 @@ class WerewolfProbabilityGUI:
 
         except Exception as e:
             messagebox.showerror("错误", f"计算过程中出现错误: {str(e)}")
+            self.log(f"错误: {str(e)}")
 
     def run_comprehensive_analysis(self):
         """运行综合分析"""
@@ -2290,7 +3230,7 @@ class WerewolfProbabilityGUI:
                 weights = self.behavior_weights[player]
                 wolf_weight = weights.get('狼权', 1.0)
                 god_weight = weights.get('神权', 1.0)
-                human_weight = weights.get('人权', 1.0)
+                human_weight = weights.get('民权', 1.0)
 
                 total_weight = wolf_weight + god_weight + human_weight
                 if total_weight > 0:
